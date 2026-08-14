@@ -281,6 +281,7 @@ async function renderDashboardView() {
     <div class="ledger-plate chart-card">
       <span class="eyebrow">SGD in K</span>
       <div class="chart-wrap"><canvas id="networth-chart"></canvas></div>
+      <p class="empty-note" id="chart-note"></p>
     </div>
   `;
 
@@ -311,10 +312,14 @@ async function renderDashboardView() {
   }
 
   const chartWrap = document.querySelector(".chart-wrap");
+  const chartNote = document.getElementById("chart-note");
   if (snapshots.length === 0) {
     chartWrap.innerHTML = `<p class="empty-note">No history yet — edit an item to start tracking your net worth over time.</p>`;
   } else {
     renderNetWorthChart(document.getElementById("networth-chart"), snapshots);
+    if (snapshots.length === 1) {
+      chartNote.textContent = "Only one day of history so far — the line fills in as you keep updating values on different days.";
+    }
   }
 }
 
