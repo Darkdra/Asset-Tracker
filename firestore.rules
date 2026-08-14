@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // A signed-in user may read/write anything nested under their own
+    // /users/{uid} document — categories, sections, items, and net worth
+    // history snapshots — and nothing else. There is no path in this
+    // app that grants access to another user's data, and since account
+    // creation is disabled client-side, only the one account you create
+    // manually in the Firebase Console can ever authenticate.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
