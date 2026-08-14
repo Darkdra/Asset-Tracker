@@ -82,22 +82,21 @@ This is abuse-prevention **#2**.
 > failed sign-in attempts from the same source — nothing to configure. This
 > is abuse-prevention **#3**.
 
-### 8. Set a budget alert
-1. Go to <https://console.cloud.google.com/billing>, select the billing
-   account linked to this project.
-2. **Budgets & alerts → Create budget.**
-3. Scope it to this project, set an amount like **SGD $1** (or whatever
-   makes you comfortable), keep the default alert thresholds (50/90/100%).
-4. Save.
+### 8. Budget alert — not needed, and here's why
+This app only uses Email/Password Authentication and Firestore, both of
+which run entirely on Firebase's free **Spark** plan — no billing account,
+no credit card, ever. Only Cloud Storage, phone/SMS auth, or blowing through
+Firestore's daily free quota (50K reads / 20K writes a day — far beyond
+personal use) would require upgrading to the paid **Blaze** plan.
 
-Since your expected usage is $0/month, any alert firing means something
-unexpected is happening and you'll get an email. This is abuse-prevention **#5**.
+If Google Cloud Console tells you the project "has no billing account," that
+is expected and is exactly what you want: with no billing account attached,
+there is no mechanism for this project to ever be charged, at all. Budget
+alerts live under a billing account, so there's nothing to configure —
+Spark itself is your abuse-prevention **#5**.
 
-> Note: to actually use Email/Password auth and Firestore outside of very
-> light testing, Firebase asks you to be on the **Blaze** (pay-as-you-go)
-> plan. Blaze doesn't mean "pay immediately" — it means "billed only past
-> the free limits." For one personal user, you'll stay at $0.00. The budget
-> alert above is your safety net regardless.
+(If you ever add a feature that needs Blaze later, upgrading will prompt you
+to set a budget alert at that point — Firebase does this automatically.)
 
 ---
 
