@@ -356,6 +356,25 @@ input:focus-visible,
 }
 .add-category-btn:hover { color: var(--accent); border-color: var(--accent); }
 
+.sidebar-sign-out {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: auto;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sidebar-sign-out:hover { color: var(--negative); border-color: var(--negative); }
+.sidebar.collapsed .sidebar-sign-out .add-label { display: none; }
+
 /* Main column */
 .main-col {
   flex: 1;
