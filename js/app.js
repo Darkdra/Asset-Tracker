@@ -90,6 +90,11 @@ document.addEventListener("click", (e) => {
   if (!settingsPanel.contains(e.target) && e.target !== btnSettings) {
     settingsPanel.classList.add("hidden");
   }
+  const catPanel = document.getElementById("category-filter-panel");
+  const catBtn = document.getElementById("btn-category-filter");
+  if (catPanel && !catPanel.contains(e.target) && e.target !== catBtn) {
+    catPanel.classList.add("hidden");
+  }
 });
 
 document.getElementById("btn-sign-out").addEventListener("click", async () => {
@@ -258,22 +263,57 @@ function openAddCategoryModal() {
 }
 
 /* ------------------------------- dashboard ------------------------------------ */
-const RANGE_DAYS = { "1m": 30, "3m": 90, all: null };
+const RANGE_DAYS = { "1m": 30, "3m": 90, "6m": 182, "1y": 365, all: null };
+const RANGE_LABELS = { "1m": "1m", "3m": "3m", "6m": "6m", "1y": "1y", all: "All" };
+const EXCLUDED_CATS_KEY = "assetTracker.excludedCategories";
+
+function getExcludedCategoryIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(EXCLUDED_CATS_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+function saveExcludedCategoryIds(set) {
+  localStorage.setItem(EXCLUDED_CATS_KEY, JSON.stringify([...set]));
+}
 
 async function renderDashboardView() {
+  const excluded = getExcludedCategoryIds();
+
   mainContent.innerHTML = `
     <div class="stat-row">
       <div class="ledger-plate stat-card">
         <span class="eyebrow">Your net worth</span>
         <span class="figure" id="stat-networth">…</span>
+        <div class="cat-filter-wrap">
+          <button class="btn btn-ghost cat-filter-btn" id="btn-category-filter" type="button">
+            <span id="cat-filter-label">All categories</span> ▾
+          </button>
+          <div class="ledger-plate cat-filter-panel hidden" id="category-filter-panel">
+            ${state.categories
+              .map(
+                (c) => `
+              <label class="cat-filter-row">
+                <input type="checkbox" data-cat-id="${c.id}" ${excluded.has(c.id) ? "" : "checked"} />
+                <span>${c.icon} ${escapeHtml(c.name)}</span>
+              </label>`
+              )
+              .join("")}
+            <div class="cat-filter-actions">
+              <button type="button" id="cf-select-all">All</button>
+              <button type="button" id="cf-select-none">None</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="ledger-plate stat-card">
         <span class="eyebrow">Performance</span>
         <span class="figure small" id="stat-performance">…</span>
         <div class="range-toggle" id="range-toggle">
-          <button data-range="1m" class="${state.range === "1m" ? "active" : ""}">1m</button>
-          <button data-range="3m" class="${state.range === "3m" ? "active" : ""}">3m</button>
-          <button data-range="all" class="${state.range === "all" ? "active" : ""}">All</button>
+          ${Object.keys(RANGE_DAYS)
+            .map((r) => `<button data-range="${r}" class="${state.range === r ? "active" : ""}">${RANGE_LABELS[r]}</button>`)
+            .join("")}
         </div>
       </div>
     </div>
@@ -289,21 +329,84 @@ async function renderDashboardView() {
     const btn = e.target.closest("button[data-range]");
     if (!btn) return;
     state.range = btn.dataset.range;
-    renderDashboardView();
+    refreshDashboardNumbers();
   });
 
-  const { total } = await data.getNetWorth(state.uid);
+  const filterBtn = document.getElementById("btn-category-filter");
+  const filterPanel = document.getElementById("category-filter-panel");
+  filterBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    filterPanel.classList.toggle("hidden");
+  });
+  filterPanel.querySelectorAll("input[data-cat-id]").forEach((cb) => {
+    cb.addEventListener("change", () => {
+      const ex = getExcludedCategoryIds();
+      if (cb.checked) ex.delete(cb.dataset.catId);
+      else ex.add(cb.dataset.catId);
+      saveExcludedCategoryIds(ex);
+      refreshDashboardNumbers();
+    });
+  });
+  document.getElementById("cf-select-all").addEventListener("click", () => {
+    saveExcludedCategoryIds(new Set());
+    filterPanel.querySelectorAll("input[data-cat-id]").forEach((cb) => (cb.checked = true));
+    refreshDashboardNumbers();
+  });
+  document.getElementById("cf-select-none").addEventListener("click", () => {
+    saveExcludedCategoryIds(new Set(state.categories.map((c) => c.id)));
+    filterPanel.querySelectorAll("input[data-cat-id]").forEach((cb) => (cb.checked = false));
+    refreshDashboardNumbers();
+  });
+
+  await refreshDashboardNumbers();
+}
+
+function updateCategoryFilterLabel() {
+  const excluded = getExcludedCategoryIds();
+  const labelEl = document.getElementById("cat-filter-label");
+  if (!labelEl) return;
+  const includedCount = state.categories.length - excluded.size;
+  labelEl.textContent =
+    excluded.size === 0
+      ? "All categories"
+      : includedCount === 0
+      ? "No categories"
+      : `${includedCount} of ${state.categories.length} categories`;
+}
+
+// Recomputes the net-worth figure, performance figure, and chart for the
+// currently selected range + category filter, without rebuilding the
+// surrounding controls (so the dropdown/range-toggle state is preserved).
+async function refreshDashboardNumbers() {
+  updateCategoryFilterLabel();
+  const excluded = getExcludedCategoryIds();
+  const includedIds = state.categories.map((c) => c.id).filter((id) => !excluded.has(id));
+
+  const { total, perCategory } = await data.getNetWorth(state.uid);
+  const filteredTotal = includedIds.reduce((sum, id) => sum + (perCategory[id] || 0), 0);
+
   const netWorthEl = document.getElementById("stat-networth");
-  netWorthEl.textContent = formatCurrency(total);
-  if (total < 0) netWorthEl.classList.add("negative");
+  netWorthEl.classList.remove("negative");
+  netWorthEl.textContent = formatCurrency(filteredTotal);
+  if (filteredTotal < 0) netWorthEl.classList.add("negative");
 
   const days = RANGE_DAYS[state.range];
   const sinceDate = days ? isoDaysAgo(days) : null;
   const snapshots = await data.getSnapshots(state.uid, sinceDate);
 
+  // For each historical snapshot, total up only the included categories.
+  // Snapshots recorded before the per-category breakdown existed fall back
+  // to their overall total (best effort) rather than showing as zero.
+  const allIncluded = excluded.size === 0;
+  const filteredSnapshots = snapshots.map((s) => ({
+    date: s.date,
+    total: allIncluded ? s.total : s.perCategory ? includedIds.reduce((sum, id) => sum + (s.perCategory[id] || 0), 0) : s.total,
+  }));
+
   const perfEl = document.getElementById("stat-performance");
-  if (snapshots.length >= 2) {
-    const change = snapshots[snapshots.length - 1].total - snapshots[0].total;
+  perfEl.classList.remove("positive", "negative", "empty-note");
+  if (filteredSnapshots.length >= 2) {
+    const change = filteredSnapshots[filteredSnapshots.length - 1].total - filteredSnapshots[0].total;
     perfEl.textContent = formatCurrency(change);
     perfEl.classList.add(change >= 0 ? "positive" : "negative");
   } else {
@@ -313,11 +416,15 @@ async function renderDashboardView() {
 
   const chartWrap = document.querySelector(".chart-wrap");
   const chartNote = document.getElementById("chart-note");
-  if (snapshots.length === 0) {
+  chartNote.textContent = "";
+  if (filteredSnapshots.length === 0) {
     chartWrap.innerHTML = `<p class="empty-note">No history yet — edit an item to start tracking your net worth over time.</p>`;
   } else {
-    renderNetWorthChart(document.getElementById("networth-chart"), snapshots);
-    if (snapshots.length === 1) {
+    if (!document.getElementById("networth-chart")) {
+      chartWrap.innerHTML = `<canvas id="networth-chart"></canvas>`;
+    }
+    renderNetWorthChart(document.getElementById("networth-chart"), filteredSnapshots);
+    if (filteredSnapshots.length === 1) {
       chartNote.textContent = "Only one day of history so far — the line fills in as you keep updating values on different days.";
     }
   }
@@ -472,8 +579,8 @@ async function renderCategoryView(catId) {
 
   async function afterMutation() {
     await renderItems();
-    const { total } = await data.getNetWorth(state.uid);
-    await data.recordSnapshot(state.uid, total);
+    const { total, perCategory } = await data.getNetWorth(state.uid);
+    await data.recordSnapshot(state.uid, total, perCategory);
   }
 
   document.getElementById("btn-add-item").addEventListener("click", () => {

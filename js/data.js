@@ -116,12 +116,14 @@ export async function getNetWorth(uid) {
 }
 
 // Upserts today's net worth into the history so the performance chart
-// has a data point for "today" every time a value changes.
-export async function recordSnapshot(uid, total) {
+// has a data point for "today" every time a value changes. Also stores
+// the per-category breakdown so the dashboard's category filter can
+// reconstruct filtered totals for past dates, not just the live total.
+export async function recordSnapshot(uid, total, perCategory = {}) {
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   await setDoc(
     doc(db, "users", uid, "networthSnapshots", today),
-    { date: today, total, updatedAt: serverTimestamp() },
+    { date: today, total, perCategory, updatedAt: serverTimestamp() },
     { merge: true }
   );
 }
