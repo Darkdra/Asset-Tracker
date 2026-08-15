@@ -4,6 +4,7 @@ import {
   EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile,
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import * as data from "./data.js";
+import * as currency from "./currency.js";
 import { CATEGORY_ICONS, formatCurrency, showToast, openModal, renderNetWorthChart } from "./ui.js";
 import { initTheme, toggleTheme, initSidebar, toggleSidebar } from "./theme.js";
 
@@ -12,8 +13,17 @@ const state = {
   uid: null,
   email: null,
   categories: [],
-  range: "1m", // '1m' | '3m' | 'all'
+  range: "1m", // '1m' | '3m' | '6m' | '1y' | 'all'
+  currency: currency.getCurrency(),
+  rates: { SGD: 1 },
 };
+
+// Converts a base-currency amount to the currently selected display
+// currency and formats it. Every rendered money figure should go through
+// this rather than calling formatCurrency directly.
+function fmt(baseValue) {
+  return formatCurrency(currency.convertFromBase(baseValue, state.currency, state.rates), state.currency);
+}
 
 /* ------------------------------ elements --------------------------------- */
 const viewLogin = document.getElementById("view-login");
@@ -25,10 +35,19 @@ const navList = document.getElementById("nav-list");
 const greeting = document.getElementById("greeting");
 const mainContent = document.getElementById("main-content");
 const settingsPanel = document.getElementById("settings-panel");
+const currencySelect = document.getElementById("currency-select");
 
 /* -------------------------------- boot ------------------------------------ */
 initTheme();
 initSidebar(sidebar);
+
+currencySelect.innerHTML = currency.SUPPORTED_CURRENCIES.map((c) => `<option value="${c}">${c}</option>`).join("");
+currencySelect.value = state.currency;
+currencySelect.addEventListener("change", () => {
+  state.currency = currencySelect.value;
+  currency.setCurrency(state.currency);
+  router();
+});
 
 onAuthStateChanged(auth, async (user) => {
   if (user) {
@@ -40,6 +59,13 @@ onAuthStateChanged(auth, async (user) => {
     await data.touchUserDoc(user.uid, user.email).catch(() => {});
     await data.ensureSeedData(user.uid);
     await refreshCategories();
+
+    const { rates, ok } = await currency.loadRates();
+    state.rates = rates;
+    if (!ok && state.currency !== "SGD") {
+      showToast("Couldn't fetch live exchange rates — figures may not be converted.");
+    }
+
     if (!location.hash || location.hash === "#/login") location.hash = "#/dashboard";
     router();
   } else {
@@ -359,7 +385,7 @@ async function renderDashboardView() {
     </div>
 
     <div class="ledger-plate chart-card">
-      <span class="eyebrow">SGD in K</span>
+      <span class="eyebrow">${state.currency} in K</span>
       <div class="chart-wrap"><canvas id="networth-chart"></canvas></div>
       <p class="empty-note" id="chart-note"></p>
     </div>
@@ -444,7 +470,7 @@ async function refreshDashboardNumbers() {
 
   const netWorthEl = document.getElementById("stat-networth");
   netWorthEl.classList.remove("negative");
-  netWorthEl.textContent = formatCurrency(filteredTotal);
+  netWorthEl.textContent = fmt(filteredTotal);
   if (filteredTotal < 0) netWorthEl.classList.add("negative");
 
   const days = RANGE_DAYS[state.range];
@@ -464,7 +490,7 @@ async function refreshDashboardNumbers() {
   perfEl.classList.remove("positive", "negative", "empty-note");
   if (filteredSnapshots.length >= 2) {
     const change = filteredSnapshots[filteredSnapshots.length - 1].total - filteredSnapshots[0].total;
-    perfEl.textContent = formatCurrency(change);
+    perfEl.textContent = fmt(change);
     perfEl.classList.add(change >= 0 ? "positive" : "negative");
   } else {
     perfEl.textContent = "Not enough data yet";
@@ -474,31 +500,35 @@ async function refreshDashboardNumbers() {
   const chartWrap = document.querySelector(".chart-wrap");
   const chartNote = document.getElementById("chart-note");
   chartNote.textContent = "";
-  if (filteredSnapshots.length === 0) {
+  const displaySnapshots = filteredSnapshots.map((s) => ({
+    date: s.date,
+    total: currency.convertFromBase(s.total, state.currency, state.rates),
+  }));
+  if (displaySnapshots.length === 0) {
     chartWrap.innerHTML = `<p class="empty-note">No history yet — edit an item to start tracking your net worth over time.</p>`;
   } else {
     if (!document.getElementById("networth-chart")) {
       chartWrap.innerHTML = `<canvas id="networth-chart"></canvas>`;
     }
-    renderNetWorthChart(document.getElementById("networth-chart"), filteredSnapshots);
-    if (filteredSnapshots.length === 1) {
+    renderNetWorthChart(document.getElementById("networth-chart"), displaySnapshots, state.currency);
+    if (displaySnapshots.length === 1) {
       chartNote.textContent = "Only one day of history so far — the line fills in as you keep updating values on different days.";
     }
   }
 
-  renderHistoryTable(filteredSnapshots);
+  renderHistoryTable(displaySnapshots);
 }
 
-function renderHistoryTable(filteredSnapshots) {
+function renderHistoryTable(displaySnapshots) {
   const wrap = document.getElementById("history-table-wrap");
   if (!wrap) return;
 
-  if (filteredSnapshots.length === 0) {
+  if (displaySnapshots.length === 0) {
     wrap.innerHTML = `<p class="empty-note">No history yet.</p>`;
     return;
   }
 
-  const rows = [...filteredSnapshots].reverse(); // most recent first
+  const rows = [...displaySnapshots].reverse(); // most recent first
   wrap.innerHTML =
     `<div class="history-row history-header"><span>Date</span><span>Net worth</span></div>` +
     rows
@@ -506,7 +536,7 @@ function renderHistoryTable(filteredSnapshots) {
         (s) => `
       <div class="history-row">
         <span>${formatDateLabel(s.date)}</span>
-        <span class="figure ${s.total < 0 ? "negative" : ""}">${formatCurrency(s.total)}</span>
+        <span class="figure ${s.total < 0 ? "negative" : ""}">${formatCurrency(s.total, state.currency)}</span>
       </div>`
       )
       .join("");
@@ -606,7 +636,7 @@ async function renderCategoryView(catId) {
 
     const items = await data.getItems(state.uid, catId, activeSectionId);
     const total = items.reduce((sum, it) => sum + (Number(it.value) || 0), 0);
-    totalEl.innerHTML = `Total <span class="figure ${total < 0 ? "negative" : ""}">${formatCurrency(total)}</span>`;
+    totalEl.innerHTML = `Total <span class="figure ${total < 0 ? "negative" : ""}">${fmt(total)}</span>`;
 
     listEl.innerHTML = items.length
       ? items
@@ -615,7 +645,7 @@ async function renderCategoryView(catId) {
         <div class="ledger-plate item-row" data-item="${it.id}">
           <span class="item-name">${escapeHtml(it.name)}</span>
           <div class="item-value-wrap">
-            <span class="figure item-value">${formatCurrency(it.value)}</span>
+            <span class="figure item-value">${fmt(it.value)}</span>
             <button class="icon-btn" data-edit="${it.id}" title="Edit" aria-label="Edit ${escapeHtml(it.name)}">✎</button>
             <button class="item-delete" data-delete-item="${it.id}" title="Delete" aria-label="Delete ${escapeHtml(it.name)}">🗑</button>
           </div>
@@ -642,8 +672,9 @@ async function renderCategoryView(catId) {
     const it = items.find((i) => i.id === itemId);
     const row = document.querySelector(`[data-item="${itemId}"]`);
     const wrap = row.querySelector(".item-value-wrap");
+    const displayValue = currency.convertFromBase(it.value, state.currency, state.rates);
     wrap.innerHTML = `
-      <input type="number" step="0.01" class="item-value-input" id="edit-input-${itemId}" value="${it.value}" />
+      <input type="number" step="0.01" class="item-value-input" id="edit-input-${itemId}" value="${displayValue.toFixed(2)}" />
       <button class="icon-btn" data-save="${itemId}" title="Save" aria-label="Save">✓</button>
     `;
     const input = wrap.querySelector("input");
@@ -651,9 +682,10 @@ async function renderCategoryView(catId) {
     input.select();
 
     const save = async () => {
-      const val = parseFloat(input.value);
-      if (Number.isNaN(val)) return;
-      await data.updateItemValue(state.uid, catId, activeSectionId, itemId, val);
+      const displayVal = parseFloat(input.value);
+      if (Number.isNaN(displayVal)) return;
+      const baseVal = currency.convertToBase(displayVal, state.currency, state.rates);
+      await data.updateItemValue(state.uid, catId, activeSectionId, itemId, baseVal);
       await afterMutation();
     };
 
@@ -717,7 +749,7 @@ function openAddItemModal(onSubmit) {
           <input id="item-name" type="text" maxlength="40" required placeholder="e.g. VWRA" />
         </div>
         <div class="field">
-          <label for="item-value">Value (SGD — negative for liabilities)</label>
+          <label for="item-value">Value in ${state.currency} (negative for liabilities)</label>
           <input id="item-value" type="number" step="0.01" required placeholder="e.g. -10000.12" />
         </div>
         <div class="modal-actions">
@@ -730,10 +762,11 @@ function openAddItemModal(onSubmit) {
   root.querySelector("#item-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = root.querySelector("#item-name").value.trim();
-    const value = parseFloat(root.querySelector("#item-value").value);
-    if (!name || Number.isNaN(value)) return;
+    const displayValue = parseFloat(root.querySelector("#item-value").value);
+    if (!name || Number.isNaN(displayValue)) return;
+    const baseValue = currency.convertToBase(displayValue, state.currency, state.rates);
     close();
-    await onSubmit(name, value);
+    await onSubmit(name, baseValue);
   });
 }
 

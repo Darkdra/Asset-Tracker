@@ -1,9 +1,13 @@
 export const CATEGORY_ICONS = ["🏦", "📈", "💰", "🏠", "💳", "🚗", "💎", "🪙", "🏢", "✈️", "📊", "💼"];
 
-export function formatCurrency(value, currency = "SGD") {
+export function formatCurrency(value, currencyCode = "SGD") {
   const n = Number(value) || 0;
-  const abs = Math.abs(n).toLocaleString("en-SG", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `${currency} ${n < 0 ? "-" : ""}$${abs}`;
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode }).format(n);
+  } catch {
+    // Unknown/unsupported currency code — fall back to a plain number.
+    return `${currencyCode} ${n.toFixed(2)}`;
+  }
 }
 
 let toastTimer;
@@ -49,7 +53,7 @@ export function openModal({ title, bodyHtml }) {
   return { root, close };
 }
 
-export function renderNetWorthChart(canvas, snapshots) {
+export function renderNetWorthChart(canvas, snapshots, currencyCode = "SGD") {
   if (canvas._chartInstance) {
     canvas._chartInstance.destroy();
   }
@@ -106,7 +110,7 @@ export function renderNetWorthChart(canvas, snapshots) {
         y: {
           grid: { color: border },
           ticks: { color: text, font: { family: "IBM Plex Mono", size: 11 }, callback: (v) => v },
-          title: { display: true, text: "SGD in K", color: text, font: { family: "IBM Plex Mono", size: 11 } },
+          title: { display: true, text: `${currencyCode} in K`, color: text, font: { family: "IBM Plex Mono", size: 11 } },
         },
       },
     },

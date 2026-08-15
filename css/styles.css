@@ -394,8 +394,35 @@ input:focus-visible,
   background: var(--accent);
   box-shadow: var(--accent-glow);
   transition: left 0.18s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  line-height: 1;
 }
 html[data-theme="light"] .theme-switch .knob { left: 20px; }
+
+.currency-select {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%), linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 26px;
+}
+.currency-select:hover { border-color: var(--accent); }
+.currency-select:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.currency-select option { background: var(--bg-elevated); color: var(--text); }
 
 .settings-menu-wrap { position: relative; }
 
