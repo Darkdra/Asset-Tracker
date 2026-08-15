@@ -41,7 +41,7 @@ export async function loadRates() {
 
   try {
     const symbols = SUPPORTED_CURRENCIES.filter((c) => c !== BASE_CURRENCY).join(",");
-    const res = await fetch(`https://api.frankfurter.app/latest?from=${BASE_CURRENCY}&to=${symbols}`);
+    const res = await fetch(`https://api.frankfurter.dev/v1/latest?base=${BASE_CURRENCY}&symbols=${symbols}`);
     if (!res.ok) throw new Error("rate fetch failed");
     const json = await res.json();
     const rates = { [BASE_CURRENCY]: 1, ...json.rates };
