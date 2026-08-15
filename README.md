@@ -15,6 +15,9 @@ all in one place.
   it's moved over the past month, quarter, or all time, on a running chart.
 - **Make it yours.** Switch between a dark, black-and-red theme and a
   light, white-and-gold theme.
+- **Install it.** Add it to your phone or desktop home screen like a native
+  app — it opens in its own window and keeps working (read-only) if you
+  briefly lose connection.
 
 ## Access
 
