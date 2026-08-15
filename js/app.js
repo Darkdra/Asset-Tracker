@@ -571,7 +571,7 @@ async function refreshAllocationChart() {
     }));
   }
 
-  entries = entries.filter((e) => e.value !== 0);
+  entries = entries.filter((e) => e.value !== 0).sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
 
   if (entries.length === 0) {
     if (canvas._chartInstance) {
