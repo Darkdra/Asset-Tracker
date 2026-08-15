@@ -377,6 +377,7 @@ async function renderDashboardView() {
     const btn = e.target.closest("button[data-range]");
     if (!btn) return;
     state.range = btn.dataset.range;
+    btn.parentElement.querySelectorAll("button[data-range]").forEach((b) => b.classList.toggle("active", b === btn));
     refreshDashboardNumbers();
   });
 
