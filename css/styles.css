@@ -540,6 +540,8 @@ html[data-theme="light"] .theme-switch .knob { left: 20px; }
   gap: 6px;
   overflow-y: auto;
   max-height: 130px;
+  padding-right: 12px;
+  scrollbar-gutter: stable;
 }
 
 .donut-legend-row {
