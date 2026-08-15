@@ -129,6 +129,34 @@ document.getElementById("btn-sign-out").addEventListener("click", async () => {
   location.hash = "";
 });
 
+// Android/Chrome/Edge fire this instead of showing their own install UI
+// automatically; capturing it lets us offer an explicit "Install app"
+// button rather than relying on the person to find it in a browser menu.
+// iOS Safari never fires this event, so the button simply stays hidden there.
+let deferredInstallPrompt = null;
+const installBtn = document.getElementById("btn-install-app");
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  installBtn.classList.remove("hidden");
+});
+
+installBtn.addEventListener("click", async () => {
+  if (!deferredInstallPrompt) return;
+  settingsPanel.classList.add("hidden");
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  installBtn.classList.add("hidden");
+  if (outcome === "accepted") showToast("Installed — find it on your home screen.");
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  installBtn.classList.add("hidden");
+});
+
 document.getElementById("btn-change-username").addEventListener("click", () => {
   settingsPanel.classList.add("hidden");
   openChangeUsernameModal();
