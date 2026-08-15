@@ -5,7 +5,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import * as data from "./data.js";
 import * as currency from "./currency.js";
-import { CATEGORY_ICONS, formatCurrency, showToast, openModal, renderNetWorthChart } from "./ui.js";
+import { CATEGORY_ICONS, formatCurrency, showToast, openModal, renderNetWorthChart, renderAllocationChart, ALLOCATION_COLORS } from "./ui.js";
 import { initTheme, toggleTheme, initSidebar, toggleSidebar } from "./theme.js";
 
 /* ------------------------------- state ---------------------------------- */
@@ -332,6 +332,7 @@ function openAddCategoryModal() {
 const RANGE_DAYS = { "1m": 30, "3m": 90, "6m": 182, "1y": 365, all: null };
 const RANGE_LABELS = { "1m": "1m", "3m": "3m", "6m": "6m", "1y": "1y", all: "All" };
 const EXCLUDED_CATS_KEY = "assetTracker.excludedCategories";
+let dashboardDonutScope = "__all__"; // '__all__' | a category id
 
 function getExcludedCategoryIds() {
   try {
@@ -346,46 +347,60 @@ function saveExcludedCategoryIds(set) {
 
 async function renderDashboardView() {
   const excluded = getExcludedCategoryIds();
+  dashboardDonutScope = "__all__";
 
   mainContent.innerHTML = `
     <div class="stat-row">
-      <div class="ledger-plate stat-card">
-        <span class="eyebrow">Your net worth</span>
-        <span class="figure" id="stat-networth">…</span>
-        <div class="cat-filter-wrap">
-          <button class="btn btn-ghost cat-filter-btn" id="btn-category-filter" type="button">
-            <span id="cat-filter-label">All categories</span> ▾
-          </button>
-          <div class="ledger-plate cat-filter-panel hidden" id="category-filter-panel">
-            ${state.categories
-              .map(
-                (c) => `
-              <label class="cat-filter-row">
-                <input type="checkbox" data-cat-id="${c.id}" ${excluded.has(c.id) ? "" : "checked"} />
-                <span>${c.icon} ${escapeHtml(c.name)}</span>
-              </label>`
-              )
-              .join("")}
-            <div class="cat-filter-actions">
-              <button type="button" id="cf-select-all">All</button>
-              <button type="button" id="cf-select-none">None</button>
+      <div class="stat-column">
+        <div class="ledger-plate stat-card">
+          <span class="eyebrow">Your net worth</span>
+          <span class="figure" id="stat-networth">…</span>
+          <div class="cat-filter-wrap">
+            <button class="btn btn-ghost cat-filter-btn" id="btn-category-filter" type="button">
+              <span id="cat-filter-label">All categories</span> ▾
+            </button>
+            <div class="ledger-plate cat-filter-panel hidden" id="category-filter-panel">
+              ${state.categories
+                .map(
+                  (c) => `
+                <label class="cat-filter-row">
+                  <input type="checkbox" data-cat-id="${c.id}" ${excluded.has(c.id) ? "" : "checked"} />
+                  <span>${c.icon} ${escapeHtml(c.name)}</span>
+                </label>`
+                )
+                .join("")}
+              <div class="cat-filter-actions">
+                <button type="button" id="cf-select-all">All</button>
+                <button type="button" id="cf-select-none">None</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      <div class="ledger-plate stat-card">
-        <span class="eyebrow">Performance</span>
-        <span class="figure small" id="stat-performance">…</span>
-        <div class="range-toggle" id="range-toggle">
-          ${Object.keys(RANGE_DAYS)
-            .map((r) => `<button data-range="${r}" class="${state.range === r ? "active" : ""}">${RANGE_LABELS[r]}</button>`)
-            .join("")}
+        <div class="ledger-plate stat-card">
+          <span class="eyebrow">Performance</span>
+          <span class="figure small" id="stat-performance">…</span>
+          <div class="range-toggle" id="range-toggle">
+            ${Object.keys(RANGE_DAYS)
+              .map((r) => `<button data-range="${r}" class="${state.range === r ? "active" : ""}">${RANGE_LABELS[r]}</button>`)
+              .join("")}
+          </div>
         </div>
+      </div>
+
+      <div class="ledger-plate donut-card">
+        <div class="donut-card-head">
+          <span class="eyebrow">Allocation</span>
+          <select class="donut-scope-select" id="donut-scope-select" aria-label="Allocation breakdown">
+            <option value="__all__">All categories</option>
+            ${state.categories.map((c) => `<option value="${c.id}">${c.icon} ${escapeHtml(c.name)}</option>`).join("")}
+          </select>
+        </div>
+        <div class="donut-wrap"><canvas id="allocation-chart"></canvas></div>
+        <div class="donut-legend" id="donut-legend"></div>
       </div>
     </div>
 
     <div class="ledger-plate chart-card">
-      <span class="eyebrow">${state.currency} in K</span>
       <div class="chart-wrap"><canvas id="networth-chart"></canvas></div>
       <p class="empty-note" id="chart-note"></p>
     </div>
@@ -405,6 +420,11 @@ async function renderDashboardView() {
     state.range = btn.dataset.range;
     btn.parentElement.querySelectorAll("button[data-range]").forEach((b) => b.classList.toggle("active", b === btn));
     refreshDashboardNumbers();
+  });
+
+  document.getElementById("donut-scope-select").addEventListener("change", (e) => {
+    dashboardDonutScope = e.target.value;
+    refreshAllocationChart();
   });
 
   const filterBtn = document.getElementById("btn-category-filter");
@@ -517,6 +537,70 @@ async function refreshDashboardNumbers() {
   }
 
   renderHistoryTable(displaySnapshots);
+  await refreshAllocationChart();
+}
+
+// Draws the allocation donut. In "__all__" scope it shows each included
+// category's share of net worth; when scoped to a specific category it
+// drills into that category's individual items instead.
+async function refreshAllocationChart() {
+  const canvas = document.getElementById("allocation-chart");
+  const legendEl = document.getElementById("donut-legend");
+  if (!canvas || !legendEl) return;
+
+  let entries = []; // [{ label, value }]
+
+  if (dashboardDonutScope === "__all__") {
+    const excluded = getExcludedCategoryIds();
+    const included = state.categories.filter((c) => !excluded.has(c.id));
+    const { perCategory } = await data.getNetWorth(state.uid);
+    entries = included.map((c) => ({ label: `${c.icon} ${c.name}`, value: perCategory[c.id] || 0 }));
+  } else {
+    const cat = state.categories.find((c) => c.id === dashboardDonutScope);
+    if (!cat) {
+      dashboardDonutScope = "__all__";
+      const sel = document.getElementById("donut-scope-select");
+      if (sel) sel.value = "__all__";
+      return refreshAllocationChart();
+    }
+    const items = await data.getCategoryItemsFlat(state.uid, cat.id);
+    const multipleSections = new Set(items.map((it) => it.sectionName)).size > 1;
+    entries = items.map((it) => ({
+      label: multipleSections ? `${it.name} (${it.sectionName})` : it.name,
+      value: it.value,
+    }));
+  }
+
+  entries = entries.filter((e) => e.value !== 0);
+
+  if (entries.length === 0) {
+    if (canvas._chartInstance) {
+      canvas._chartInstance.destroy();
+      canvas._chartInstance = null;
+    }
+    legendEl.innerHTML = `<p class="empty-note">Nothing to show yet.</p>`;
+    return;
+  }
+
+  const magnitudeSum = entries.reduce((sum, e) => sum + Math.abs(e.value), 0);
+  renderAllocationChart(
+    document.getElementById("allocation-chart"),
+    entries.map((e) => e.label),
+    entries.map((e) => e.value)
+  );
+
+  legendEl.innerHTML = entries
+    .map((e, i) => {
+      const pct = magnitudeSum ? (Math.abs(e.value) / magnitudeSum) * 100 : 0;
+      const sign = e.value < 0 ? "-" : "";
+      return `
+      <div class="donut-legend-row">
+        <span class="swatch" style="background:${ALLOCATION_COLORS[i % ALLOCATION_COLORS.length]}"></span>
+        <span class="legend-label">${escapeHtml(e.label)}</span>
+        <span class="legend-pct ${e.value < 0 ? "negative" : ""}">${sign}${pct.toFixed(1)}%</span>
+      </div>`;
+    })
+    .join("");
 }
 
 function renderHistoryTable(displaySnapshots) {

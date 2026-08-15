@@ -91,6 +91,21 @@ export async function deleteItem(uid, catId, secId, itemId) {
 
 /* --------------------------- Net worth math ---------------------------- */
 
+// Flattens every item across every section of a category into one list —
+// used by the dashboard's allocation donut when drilled into a category.
+// Section name is attached so items can be disambiguated in the legend.
+export async function getCategoryItemsFlat(uid, catId) {
+  const sections = await getSections(uid, catId);
+  const flat = [];
+  for (const sec of sections) {
+    const items = await getItems(uid, catId, sec.id);
+    for (const it of items) {
+      flat.push({ ...it, sectionName: sec.name });
+    }
+  }
+  return flat;
+}
+
 // Sums every item across every section of a single category.
 export async function getCategoryTotal(uid, catId) {
   const sections = await getSections(uid, catId);

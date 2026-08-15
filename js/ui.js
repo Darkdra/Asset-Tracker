@@ -53,6 +53,46 @@ export function openModal({ title, bodyHtml }) {
   return { root, close };
 }
 
+export const ALLOCATION_COLORS = [
+  "#ff1744", "#ffb700", "#17ff9e", "#00e5ff", "#c77dff",
+  "#ff6ec7", "#fdd835", "#40c4ff", "#ff8a65", "#b2ff59",
+];
+
+export function renderAllocationChart(canvas, labels, values) {
+  if (canvas._chartInstance) {
+    canvas._chartInstance.destroy();
+  }
+  const styles = getComputedStyle(document.documentElement);
+  const bg = styles.getPropertyValue("--surface").trim();
+
+  // Doughnut slices must be non-negative sizes; magnitude (not sign) drives
+  // slice size, so a liability category still shows as a visible slice —
+  // its sign is instead conveyed in the legend text next to it.
+  const magnitudes = values.map((v) => Math.abs(v));
+
+  canvas._chartInstance = new Chart(canvas, {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [
+        {
+          data: magnitudes,
+          backgroundColor: labels.map((_, i) => ALLOCATION_COLORS[i % ALLOCATION_COLORS.length]),
+          borderColor: bg,
+          borderWidth: 2,
+          hoverOffset: 6,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "68%",
+      plugins: { legend: { display: false } },
+    },
+  });
+}
+
 export function renderNetWorthChart(canvas, snapshots, currencyCode = "SGD") {
   if (canvas._chartInstance) {
     canvas._chartInstance.destroy();
