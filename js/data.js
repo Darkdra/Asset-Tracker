@@ -137,6 +137,18 @@ export async function getSnapshots(uid, sinceDate /* 'YYYY-MM-DD' | null */) {
   return snap.docs.map((d) => d.data());
 }
 
+// Deletes every net worth history entry strictly before `beforeDate`
+// ('YYYY-MM-DD'). Returns the number of entries deleted.
+export async function deleteOldSnapshots(uid, beforeDate) {
+  const q = query(snapshotsCol(uid), where("date", "<", beforeDate));
+  const snap = await getDocs(q);
+  if (snap.empty) return 0;
+  const batch = writeBatch(db);
+  snap.docs.forEach((d) => batch.delete(d.ref));
+  await batch.commit();
+  return snap.docs.length;
+}
+
 /* ------------------------------ Settings ------------------------------- */
 // (Kept for future use — theme is currently stored in localStorage instead,
 // see js/theme.js.)

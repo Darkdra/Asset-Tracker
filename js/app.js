@@ -1,7 +1,7 @@
 import { auth } from "./firebase-init.js";
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut,
-  EmailAuthProvider, reauthenticateWithCredential, updatePassword,
+  EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile,
 } from "https://www.gstatic.com/firebasejs/12.17.1/firebase-auth.js";
 import * as data from "./data.js";
 import { CATEGORY_ICONS, formatCurrency, showToast, openModal, renderNetWorthChart } from "./ui.js";
@@ -36,7 +36,7 @@ onAuthStateChanged(auth, async (user) => {
     state.email = user.email;
     viewLogin.classList.add("hidden");
     viewApp.classList.remove("hidden");
-    greeting.textContent = `Hi, ${nameFromEmail(user.email)}!`;
+    greeting.textContent = `Hi, ${user.displayName || nameFromEmail(user.email)}!`;
     await data.touchUserDoc(user.uid, user.email).catch(() => {});
     await data.ensureSeedData(user.uid);
     await refreshCategories();
@@ -102,6 +102,46 @@ document.getElementById("btn-sign-out").addEventListener("click", async () => {
   await signOut(auth);
   location.hash = "";
 });
+
+document.getElementById("btn-change-username").addEventListener("click", () => {
+  settingsPanel.classList.add("hidden");
+  openChangeUsernameModal();
+});
+
+function openChangeUsernameModal() {
+  const current = auth.currentUser.displayName || "";
+  const { root, close } = openModal({
+    title: "Change username",
+    bodyHtml: `
+      <form id="username-form">
+        <div class="field">
+          <label for="username-input">Display name</label>
+          <input id="username-input" type="text" maxlength="40" required value="${escapeHtml(current)}" placeholder="e.g. Alex" />
+        </div>
+        <p class="modal-error" id="username-error"></p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close-modal>Cancel</button>
+          <button type="submit" class="btn btn-primary" style="width:auto">Save</button>
+        </div>
+      </form>
+    `,
+  });
+
+  root.querySelector("#username-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = root.querySelector("#username-input").value.trim();
+    const errorEl = root.querySelector("#username-error");
+    if (!name) return;
+    try {
+      await updateProfile(auth.currentUser, { displayName: name });
+      greeting.textContent = `Hi, ${name}!`;
+      close();
+      showToast("Username updated.");
+    } catch (err) {
+      errorEl.textContent = "Couldn't update username — try again.";
+    }
+  });
+}
 
 document.getElementById("btn-change-password").addEventListener("click", () => {
   settingsPanel.classList.add("hidden");
@@ -323,6 +363,14 @@ async function renderDashboardView() {
       <div class="chart-wrap"><canvas id="networth-chart"></canvas></div>
       <p class="empty-note" id="chart-note"></p>
     </div>
+
+    <div class="ledger-plate table-card">
+      <div class="table-card-head">
+        <span class="eyebrow">Net worth history</span>
+        <button class="btn btn-ghost" id="btn-delete-old" type="button">Delete data older than 1 year</button>
+      </div>
+      <div id="history-table-wrap"></div>
+    </div>
   `;
 
   document.getElementById("range-toggle").addEventListener("click", (e) => {
@@ -356,6 +404,14 @@ async function renderDashboardView() {
     saveExcludedCategoryIds(new Set(state.categories.map((c) => c.id)));
     filterPanel.querySelectorAll("input[data-cat-id]").forEach((cb) => (cb.checked = false));
     refreshDashboardNumbers();
+  });
+
+  document.getElementById("btn-delete-old").addEventListener("click", async () => {
+    if (!confirm("Delete all net worth history older than 1 year? This can't be undone.")) return;
+    const cutoff = isoDaysAgo(365);
+    const count = await data.deleteOldSnapshots(state.uid, cutoff);
+    showToast(count ? `Deleted ${count} entr${count === 1 ? "y" : "ies"} older than 1 year.` : "No history older than 1 year.");
+    await refreshDashboardNumbers();
   });
 
   await refreshDashboardNumbers();
@@ -428,6 +484,36 @@ async function refreshDashboardNumbers() {
       chartNote.textContent = "Only one day of history so far — the line fills in as you keep updating values on different days.";
     }
   }
+
+  renderHistoryTable(filteredSnapshots);
+}
+
+function renderHistoryTable(filteredSnapshots) {
+  const wrap = document.getElementById("history-table-wrap");
+  if (!wrap) return;
+
+  if (filteredSnapshots.length === 0) {
+    wrap.innerHTML = `<p class="empty-note">No history yet.</p>`;
+    return;
+  }
+
+  const rows = [...filteredSnapshots].reverse(); // most recent first
+  wrap.innerHTML =
+    `<div class="history-row history-header"><span>Date</span><span>Net worth</span></div>` +
+    rows
+      .map(
+        (s) => `
+      <div class="history-row">
+        <span>${formatDateLabel(s.date)}</span>
+        <span class="figure ${s.total < 0 ? "negative" : ""}">${formatCurrency(s.total)}</span>
+      </div>`
+      )
+      .join("");
+}
+
+function formatDateLabel(iso) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString("en-SG", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" });
 }
 
 function isoDaysAgo(days) {
