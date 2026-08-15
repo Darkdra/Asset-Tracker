@@ -64,6 +64,21 @@ export function renderNetWorthChart(canvas, snapshots) {
   });
   const values = snapshots.map((s) => Math.round((s.total || 0) / 1000));
 
+  // Gives the line a neon-sign glow by applying a canvas shadow while the
+  // dataset is drawn, then clearing it so it doesn't bleed into the axes.
+  const neonGlowPlugin = {
+    id: "neonGlow",
+    beforeDatasetsDraw(chart) {
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 14;
+    },
+    afterDatasetsDraw(chart) {
+      chart.ctx.restore();
+    },
+  };
+
   canvas._chartInstance = new Chart(canvas, {
     type: "line",
     data: {
@@ -81,6 +96,7 @@ export function renderNetWorthChart(canvas, snapshots) {
         },
       ],
     },
+    plugins: [neonGlowPlugin],
     options: {
       responsive: true,
       maintainAspectRatio: false,

@@ -5,21 +5,22 @@
    =========================================================== */
 
 :root {
-  --bg: #100c0d;
-  --bg-elevated: #171113;
-  --surface: #1c1517;
-  --surface-hover: #241a1d;
-  --border: #362225;
-  --border-strong: #4a2c30;
-  --text: #f3e9ea;
-  --text-dim: #ac8d90;
-  --text-faint: #705759;
-  --accent: #e0919a;
-  --accent-strong: #c76470;
-  --accent-soft: rgba(224, 145, 154, 0.14);
-  --positive: #8fbfa0;
-  --negative: #dd7b73;
-  --shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.6);
+  --bg: #060505;
+  --bg-elevated: #0b0909;
+  --surface: #100c0d;
+  --surface-hover: #1a1213;
+  --border: #2c1216;
+  --border-strong: #4a161f;
+  --text: #f6f2f2;
+  --text-dim: #ab9a9c;
+  --text-faint: #6e5c5e;
+  --accent: #ff1744;
+  --accent-strong: #ff4569;
+  --accent-soft: rgba(255, 23, 68, 0.16);
+  --accent-glow: 0 0 8px rgba(255, 23, 68, 0.55), 0 0 22px rgba(255, 23, 68, 0.28);
+  --positive: #17ff9e;
+  --negative: #ff3860;
+  --shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.75);
 
   --font-display: "Fraunces", "Iowan Old Style", serif;
   --font-body: "Public Sans", -apple-system, BlinkMacSystemFont, sans-serif;
@@ -33,21 +34,22 @@
 }
 
 html[data-theme="light"] {
-  --bg: #faf6ee;
+  --bg: #ffffff;
   --bg-elevated: #ffffff;
   --surface: #ffffff;
-  --surface-hover: #f5edd8;
-  --border: #e4d6ac;
-  --border-strong: #cdb475;
-  --text: #2a2116;
-  --text-dim: #6c5d3f;
-  --text-faint: #9c8b62;
-  --accent: #a97f26;
-  --accent-strong: #7f5e19;
-  --accent-soft: rgba(169, 127, 38, 0.12);
-  --positive: #3f7d54;
-  --negative: #a53f36;
-  --shadow: 0 18px 40px -18px rgba(120, 100, 50, 0.25);
+  --surface-hover: #fff6dc;
+  --border: #f0dea0;
+  --border-strong: #e3bd3a;
+  --text: #191509;
+  --text-dim: #5c5230;
+  --text-faint: #93885e;
+  --accent: #ffb700;
+  --accent-strong: #e0a000;
+  --accent-soft: rgba(255, 183, 0, 0.18);
+  --accent-glow: 0 0 8px rgba(255, 183, 0, 0.45), 0 0 22px rgba(255, 183, 0, 0.22);
+  --positive: #12b76a;
+  --negative: #ff2953;
+  --shadow: 0 18px 40px -18px rgba(180, 130, 0, 0.3);
   color-scheme: light;
 }
 
@@ -113,8 +115,8 @@ input:focus-visible,
   letter-spacing: -0.01em;
 }
 
-.figure.positive { color: var(--positive); }
-.figure.negative { color: var(--negative); }
+.figure.positive { color: var(--positive); text-shadow: 0 0 10px currentColor, 0 0 24px currentColor; }
+.figure.negative { color: var(--negative); text-shadow: 0 0 10px currentColor, 0 0 24px currentColor; }
 
 /* ===========================================================
    Login view
@@ -205,6 +207,7 @@ input:focus-visible,
   width: 100%;
   padding: 13px 18px;
   margin-top: 6px;
+  box-shadow: var(--accent-glow);
 }
 
 .btn-primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
@@ -316,6 +319,7 @@ input:focus-visible,
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
+  box-shadow: var(--accent-glow);
 }
 
 .nav-delete {
@@ -388,6 +392,7 @@ input:focus-visible,
   height: 18px;
   border-radius: 50%;
   background: var(--accent);
+  box-shadow: var(--accent-glow);
   transition: left 0.18s ease;
 }
 html[data-theme="light"] .theme-switch .knob { left: 20px; }
@@ -460,7 +465,7 @@ html[data-theme="light"] .theme-switch .knob { left: 20px; }
   border-radius: 6px;
   cursor: pointer;
 }
-.range-toggle button.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.range-toggle button.active { background: var(--accent-soft); color: var(--accent); font-weight: 700; box-shadow: var(--accent-glow); }
 
 .cat-filter-wrap {
   position: relative;
@@ -613,7 +618,7 @@ html[data-theme="light"] .theme-switch .knob { left: 20px; }
   font-weight: 600;
 }
 .section-tab:hover { border-color: var(--border-strong); }
-.section-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.section-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); box-shadow: var(--accent-glow); }
 
 .section-tab .tab-delete {
   width: 16px;
